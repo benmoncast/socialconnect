@@ -40,12 +40,12 @@ This project does **not** use Facebook, Meta, or any real company branding, logo
 
 * User registration
 * User login
-* JWT-based authentication
+* JWT-based authentication using HttpOnly cookies
 * Authenticated `/api/auth/me` endpoint
 * Password encryption using BCrypt
 * Protected backend routes
 * Protected frontend routes
-* Persistent login using localStorage token
+* Persistent login using secure cookies and CSRF protection
 
 ### User Profile
 
@@ -260,26 +260,32 @@ Open:
 backend/src/main/resources/application.properties
 ```
 
-Example configuration:
+Production configuration is intentionally strict and reads deployment values from
+environment variables:
 
 ```properties
 spring.application.name=socialconnect
 
-server.port=8080
+server.port=${SERVER_PORT:8080}
 
-spring.datasource.url=jdbc:mysql://localhost:3306/socialconnect_db?createDatabaseIfNotExist=true
-spring.datasource.username=root
-spring.datasource.password=
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
 
-spring.jpa.hibernate.ddl-auto=update
-spring.jpa.show-sql=true
-spring.jpa.properties.hibernate.format_sql=true
+spring.jpa.hibernate.ddl-auto=validate
+spring.jpa.show-sql=false
+spring.jpa.properties.hibernate.format_sql=false
 
-app.jwt.secret=change-this-secret-key-change-this-secret-key
-app.jwt.expiration=86400000
+app.cors.allowed-origins=${CORS_ALLOWED_ORIGINS}
+app.jwt.secret=${JWT_SECRET}
+app.jwt.expiration=${JWT_EXPIRATION:3600000}
 
-app.upload.dir=uploads
+app.upload.dir=${UPLOAD_DIR:uploads}
 ```
+
+For local development, `mvn spring-boot:run` activates the `dev` profile, which
+provides local-only defaults from `application-dev.properties`. Do not deploy
+with the `dev` profile.
 
 ---
 
@@ -326,17 +332,10 @@ import axios from "axios";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api",
+  withCredentials: true,
 });
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem("token");
-
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-
-  return config;
-});
+// See frontend/src/api/client.js for the full CSRF bootstrap flow.
 
 export default api;
 ```
@@ -365,6 +364,8 @@ http://localhost:5173
 | ------ | -------------------- | ---------------------- |
 | POST   | `/api/auth/register` | Register a new user    |
 | POST   | `/api/auth/login`    | Login user             |
+| POST   | `/api/auth/logout`   | Clear auth cookie      |
+| GET    | `/api/auth/csrf`     | Get CSRF token cookie  |
 | GET    | `/api/auth/me`       | Get authenticated user |
 
 ---
@@ -590,20 +591,76 @@ Upload features include:
 * Profile picture upload
 * Cover photo upload
 * Post image upload
+* MIME type and file signature validation
+* JPEG and PNG re-encoding to strip embedded metadata
 
 ---
 
 ## Security Features
 
-* JWT authentication
+* JWT authentication using HttpOnly cookies
+* CSRF protection for cookie-authenticated writes
+* Login/register rate limiting and failed-login cooldown
 * BCrypt password hashing
 * Spring Security protected routes
+* HTTPS enforcement in production profile
+* Reverse proxy header support
+* Health endpoint support through Spring Boot Actuator
 * CORS configuration for frontend access
 * Authorization checks for editing and deleting own posts/comments
+* Authorization checks for friend request and notification ownership
 * Duplicate email validation
 * Duplicate username validation
 * Friend request validation
 * Role-ready user structure for future admin features
+
+### Production Security Notes
+
+* Production requires real environment values for database, CORS, and JWT settings.
+* The local Maven run uses the `dev` profile; do not deploy with that profile.
+* Browser authentication uses an HttpOnly JWT cookie and an `X-XSRF-TOKEN` header.
+* The current abuse limiter is in-memory. Use Redis, a gateway, or a WAF for multi-instance deployments.
+* Local upload storage is acceptable for development. Use object storage and malware scanning for public production.
+* CI runs npm audit and backend dependency checks, and Dependabot is configured for Maven, npm, and GitHub Actions.
+
+### Vercel And Railway Deployment
+
+Frontend Vercel environment:
+
+```env
+VITE_API_BASE_URL=https://replace-with-your-railway-backend-domain.up.railway.app/api
+VITE_PUBLIC_APP_HOSTS=socialconnect-green.vercel.app
+```
+
+Backend Railway environment:
+
+```env
+CORS_ALLOWED_ORIGINS=https://socialconnect-green.vercel.app
+JWT_SECRET=replace_with_at_least_32_random_characters
+JWT_EXPIRATION=3600000
+REQUIRE_HTTPS=true
+AUTH_COOKIE_SECURE=true
+AUTH_COOKIE_SAME_SITE=None
+UPLOAD_DIR=uploads
+```
+
+For the database, either set `DB_URL`, `DB_USERNAME`, and `DB_PASSWORD`, or let
+the backend use Railway's MySQL variables:
+
+```env
+MYSQLHOST=mysql.railway.internal
+MYSQLPORT=3306
+MYSQLDATABASE=railway
+MYSQLUSER=replace_with_railway_mysql_user
+MYSQLPASSWORD=replace_with_railway_mysql_password
+```
+
+Do not paste Railway's raw `mysql://...` URL into `DB_URL`. Spring Boot expects
+a JDBC URL such as `jdbc:mysql://host:port/database?...`.
+
+If the frontend and backend are deployed on different sites, `AUTH_COOKIE_SAME_SITE=None`
+and `AUTH_COOKIE_SECURE=true` are required. For the most reliable cookie behavior,
+use a custom domain later, such as `app.example.com` and `api.example.com`.
 
 ---
 
@@ -641,6 +698,9 @@ mvn clean install
 mvn spring-boot:run
 ```
 
+The Maven run goal uses the local `dev` profile. Packaged production runs still
+require real environment values for database, CORS, and JWT settings.
+
 ### Frontend
 
 ```bash
@@ -674,12 +734,12 @@ http://localhost:5173
 
 ---
 
-### JWT Unauthorized Error
+### Authentication Error
 
-Make sure the token is stored in localStorage and sent in the request header:
+Make sure the frontend sends credentials and first bootstraps CSRF through:
 
 ```txt
-Authorization: Bearer your_token_here
+GET /api/auth/csrf
 ```
 
 ---

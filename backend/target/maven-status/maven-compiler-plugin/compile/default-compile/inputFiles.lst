@@ -42,6 +42,8 @@ D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\exa
 D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\security\JwtAuthenticationFilter.java
 D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\security\JwtService.java
 D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\security\UserPrincipalService.java
+D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\service\AuthAbuseProtectionService.java
+D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\service\AuthCookieService.java
 D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\service\AuthService.java
 D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\service\CurrentUserService.java
 D:\UCLM-Materials\ITELECT\June 2026\user-fbprofile\backend\src\main\java\com\example\socialconnect\service\DtoMapper.java

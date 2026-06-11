@@ -10,6 +10,7 @@ import com.example.socialconnect.repository.UserRepository;
 import com.example.socialconnect.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -27,8 +28,11 @@ public class AuthService {
     private final JwtService jwtService;
     private final CurrentUserService currentUserService;
     private final DtoMapper dtoMapper;
+    private final AuthAbuseProtectionService authAbuseProtectionService;
 
-    public AuthResponse register(RegisterRequest request) {
+    public AuthResponse register(RegisterRequest request, String clientKey) {
+        authAbuseProtectionService.checkRegisterAllowed(clientKey);
+
         if (userRepository.existsByUsername(request.username())) {
             throw new AppException(HttpStatus.CONFLICT, "Username is already taken");
         }
@@ -50,14 +54,25 @@ public class AuthService {
         return new AuthResponse(jwtService.generateToken(user), dtoMapper.toUserDto(user, "SELF"));
     }
 
-    public AuthResponse login(LoginRequest request) {
+    public AuthResponse login(LoginRequest request, String clientKey) {
+        authAbuseProtectionService.checkLoginAllowed(request.identifier(), clientKey);
+
         User user = userRepository.findByEmailOrUsername(request.identifier(), request.identifier())
-                .orElseThrow(() -> new AppException(HttpStatus.UNAUTHORIZED, "Invalid email, username, or password"));
+                .orElseThrow(() -> {
+                    authAbuseProtectionService.recordLoginFailure(request.identifier());
+                    return new AppException(HttpStatus.UNAUTHORIZED, "Invalid email, username, or password");
+                });
 
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(user.getEmail(), request.password())
-        );
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(user.getEmail(), request.password())
+            );
+        } catch (AuthenticationException ex) {
+            authAbuseProtectionService.recordLoginFailure(request.identifier());
+            throw ex;
+        }
 
+        authAbuseProtectionService.recordLoginSuccess(request.identifier());
         return new AuthResponse(jwtService.generateToken(user), dtoMapper.toUserDto(user, "SELF"));
     }
 

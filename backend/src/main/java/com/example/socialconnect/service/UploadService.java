@@ -1,13 +1,18 @@
 package com.example.socialconnect.service;
 
 import com.example.socialconnect.exception.AppException;
+import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
+import javax.imageio.ImageIO;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -44,7 +49,7 @@ public class UploadService {
         try {
             Files.createDirectories(uploadRoot);
             String fileName = UUID.randomUUID() + "." + extension;
-            Files.copy(file.getInputStream(), uploadRoot.resolve(fileName));
+            storeSanitizedImage(file, extension, uploadRoot.resolve(fileName));
             return "/uploads/" + fileName;
         } catch (IOException ex) {
             throw new AppException(HttpStatus.INTERNAL_SERVER_ERROR, "Could not store uploaded file");
@@ -65,6 +70,39 @@ public class UploadService {
         } catch (IOException ex) {
             throw new AppException(HttpStatus.BAD_REQUEST, "Could not read uploaded image");
         }
+    }
+
+    private void storeSanitizedImage(MultipartFile file, String extension, Path destination) throws IOException {
+        if ("webp".equals(extension)) {
+            Files.copy(file.getInputStream(), destination);
+            return;
+        }
+
+        BufferedImage image = ImageIO.read(file.getInputStream());
+        if (image == null) {
+            throw new AppException(HttpStatus.BAD_REQUEST, "Only valid JPG, JPEG, PNG, and WEBP images are allowed");
+        }
+
+        String format = "png".equals(extension) ? "png" : "jpg";
+        BufferedImage sanitized = "png".equals(format) ? image : toRgbImage(image);
+        try (OutputStream outputStream = Files.newOutputStream(destination)) {
+            if (!ImageIO.write(sanitized, format, outputStream)) {
+                throw new IOException("No image writer available for uploaded image");
+            }
+        }
+    }
+
+    private BufferedImage toRgbImage(BufferedImage source) {
+        BufferedImage rgbImage = new BufferedImage(source.getWidth(), source.getHeight(), BufferedImage.TYPE_INT_RGB);
+        Graphics2D graphics = rgbImage.createGraphics();
+        try {
+            graphics.setColor(Color.WHITE);
+            graphics.fillRect(0, 0, source.getWidth(), source.getHeight());
+            graphics.drawImage(source, 0, 0, null);
+        } finally {
+            graphics.dispose();
+        }
+        return rgbImage;
     }
 
     private boolean contentTypeMatchesExtension(String contentType, String extension) {

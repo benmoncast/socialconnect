@@ -31,7 +31,7 @@ public class PostController {
     private final PostService postService;
 
     @PostMapping("/posts")
-    public ResponseEntity<PostDto> createPost(@RequestBody PostRequest request) {
+    public ResponseEntity<PostDto> createPost(@Valid @RequestBody PostRequest request) {
         return ResponseEntity.status(HttpStatus.CREATED).body(postService.createPost(request));
     }
 
@@ -46,7 +46,7 @@ public class PostController {
     }
 
     @PutMapping("/posts/{postId}")
-    public ResponseEntity<PostDto> updatePost(@PathVariable Long postId, @RequestBody PostRequest request) {
+    public ResponseEntity<PostDto> updatePost(@PathVariable Long postId, @Valid @RequestBody PostRequest request) {
         return ResponseEntity.ok(postService.updatePost(postId, request));
     }
 
