@@ -53,7 +53,7 @@ api.interceptors.request.use(async (config) => {
 
 export const getApiError = (error) => {
   if (!error.response) {
-    return 'Network error. Make sure the backend is running on http://localhost:8080.'
+    return `Network error. Make sure the backend is reachable at ${API_BASE_URL}.`
   }
   return error.response.data?.message || 'Something went wrong. Please try again.'
 }
