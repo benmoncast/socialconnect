@@ -1,6 +1,6 @@
 import axios from 'axios'
 
-export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://socialconnect-production-4cf0.up.railway.app/api'
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://socialconnect-production-4cf0.up.railway.app'
 export const API_ORIGIN = API_BASE_URL.replace(/\/api(?:\/.*)?\/?$/, '')
 const CSRF_COOKIE_NAME = 'XSRF-TOKEN'
 const CSRF_HEADER_NAME = 'X-XSRF-TOKEN'
