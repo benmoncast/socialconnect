@@ -14,10 +14,10 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
-import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
 
 @Configuration
 @RequiredArgsConstructor
@@ -37,11 +37,15 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+
+        // ✅ Disable HTTPS redirect issues in local / Railway proxy
         if (requireHttps) {
             http.requiresChannel(channel -> channel.anyRequest().requiresSecure());
         }
 
+        // ✅ CSRF config (cookie-based, frontend friendly)
         CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+
         csrfTokenRepository.setCookieCustomizer(cookie -> cookie
                 .path("/")
                 .secure(secureCookies)
@@ -51,29 +55,52 @@ public class SecurityConfig {
         csrfTokenRequestHandler.setCsrfRequestAttributeName("_csrf");
 
         http
+                // ✅ CSRF (important for cookies, safe default)
                 .csrf(csrf -> csrf
                         .csrfTokenRepository(csrfTokenRepository)
-                        .csrfTokenRequestHandler(csrfTokenRequestHandler)
-                )
-                .cors(cors -> {})
+                        .csrfTokenRequestHandler(csrfTokenRequestHandler))
+
+                // ✅ CORS enabled (configured elsewhere or default)
+                .cors(cors -> {
+                })
+
+                // ✅ Security headers
                 .headers(headers -> headers
                         .httpStrictTransportSecurity(hsts -> hsts
                                 .includeSubDomains(true)
-                                .maxAgeInSeconds(31536000)
-                        )
-                )
+                                .maxAgeInSeconds(31536000)))
+
+                // ✅ Stateless JWT auth
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+
+                // ✅ AUTH RULES (FIXED)
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/api/auth/csrf", "/api/auth/register", "/api/auth/login", "/uploads/**").permitAll()
-                        .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
-                        .anyRequest().authenticated()
-                )
+                        // PUBLIC ENDPOINTS
+                        .requestMatchers(
+                                "/",
+                                "/api/auth/**",
+                                "/uploads/**",
+                                "/actuator/health",
+                                "/actuator/health/**",
+                                "/actuator/info")
+                        .permitAll()
+
+                        // EVERYTHING ELSE NEEDS JWT
+                        .anyRequest().authenticated())
+
+                // ✅ Authentication provider
                 .authenticationProvider(authenticationProvider())
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+                // ✅ JWT filter
+                .addFilterBefore(jwtAuthenticationFilter,
+                        UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
 
+    // =========================
+    // AUTH PROVIDER
+    // =========================
     @Bean
     public AuthenticationProvider authenticationProvider() {
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
@@ -82,11 +109,18 @@ public class SecurityConfig {
         return provider;
     }
 
+    // =========================
+    // AUTH MANAGER
+    // =========================
     @Bean
-    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+    public AuthenticationManager authenticationManager(
+            AuthenticationConfiguration configuration) throws Exception {
         return configuration.getAuthenticationManager();
     }
 
+    // =========================
+    // PASSWORD ENCODER
+    // =========================
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
